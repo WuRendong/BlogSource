@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>JVM架构介绍</title>
+    <url>/2020/05/25/JVM%E6%9E%B6%E6%9E%84%E4%BB%8B%E7%BB%8D/</url>
+    <content><![CDATA[<link rel="stylesheet" class="aplayer-secondary-style-marker" href="/assets/css/APlayer.min.css"><script src="/assets/js/APlayer.min.js" class="aplayer-secondary-script-marker"></script><script class="meting-secondary-script-marker" src="/assets/js/Meting.min.js"></script><h1 id="1-概览"><a href="#1-概览" class="headerlink" title="1 概览"></a>1 概览</h1><p>JVM是一种技术规范，不同的厂商可能会有些不同的定义，根据规范，普遍被接受的一种架构如下。</p>
+<p><img src="/images/jvm/jvm_overview.png" alt="overview"></p>
+<h1 id="2-类加载器子系统（Class-loader-subsystem）"><a href="#2-类加载器子系统（Class-loader-subsystem）" class="headerlink" title="2 类加载器子系统（Class loader subsystem）"></a>2 类加载器子系统（Class loader subsystem）</h1><p>JVM处于RAM中，在执行过程中，使用类加载器子系统将类文件引入RAM，这叫类动态加载功能，在运行时（非编译时）第一次引用一个类的时候会进行加载、连接、初始化相应的类文件（.class）。</p>
+<h2 id="2-1-加载（Loading）"><a href="#2-1-加载（Loading）" class="headerlink" title="2.1 加载（Loading）"></a>2.1 加载（Loading）</h2><p>载入编译过的类文件(.class文件)到内存中是类加载器的主要任务，所有之后的类载入会根据已经运行的类中的引用进行，相关的场景如下<br>1） 当字节码对一个类做了静态引用 （例如System.out）<br>2） 当字节码创建了一个类对象 （例如 Person person = new Person(“John”)）</p>
+<p>有三种类加载器（具有继承关系），它们遵循以下四个主要原则：</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">- 可见原则(visibility principle)</span><br><span class="line">	子类加载器可以看见父类加载器载入的类，但是父加载器不能找到子类加载器载入的类。</span><br><span class="line">- 唯一原则(uniqueness principle)</span><br><span class="line">	父类加载器载入的类不能被子类加载器再次载入，确保类的重复载入不会发生。</span><br><span class="line">- 委派层次原则(delegation     hierarchy principle)</span><br><span class="line">	为了满足可见原则和唯一原则，JVM在为加载的类选择加载器的时候遵循一种委派层次，从最低层次开始，Application 		Class Loader（也叫Sysetem Class Loader）将收到的类加载请求委派给Extention Class Loader, Extention 		Class Loader将请求委派给Bootstrap Class Loader，如果请求的类在Bootstrap路径被发现，就会直接载入，否则会		请求会转回Extention Class Loader层次，从Extention路径或是自定义路径查找，如果也失败，请求会转回到					Application Class Loader从System类路径查找，如果Application Class Loader也没有成功载入请求的类，会得到	运行时的Exception - java.lang.ClassNotFoundException。图2展示了这一原则描述的委派机制。</span><br><span class="line">- 不卸载原则(no unloading     principle)</span><br><span class="line">	及时类加载器可以加载类，但是不能卸载已经加载的类，如果需要卸载，可以删除当前的类加载器，并可以创建新的类加载	器。</span><br></pre></td></tr></table></figure>
+
+<img src="/images/jvm/jvm_loading_subsystem.png" alt="Loading Sub System" style="zoom: 50%;" />
+<div align="center">图2</div>
+
+<p>上图描述了三个类加载器以及类加载器的双亲委派机制，各加载器的描述如下</p>
+<p><em>TODO: class loader启动过程</em></p>
+<ul>
+<li><p><strong>Bootstrap Class Loader</strong><br>Bootstrap Class Loader从bootstrap路径（$JAVA_HOME/jre/lib）中的rt.jar中载入标准JDK类，比如核心的Java API类（例如 java.lang.* package classes），它是用Native语言（如C/C++）来实现的，在java中表现为所有类加载器的双亲（顶层类加载器）。</p>
+</li>
+<li><p><strong>Extension Class Loader</strong><br>Extension Class Loader委派类加载请求给它的双亲Bootstrap Class Loader，如果不成功，会从extentsion路径的extension路径（$JAVA_HOME/jre/lib/ext或是java.ext.dirs系统属性置顶的路径）载入类（例如 security extension function），这个类加载器在Java中通过sun.misc.Launcher$ExtclassLoader类实现。</p>
+</li>
+<li><p><strong>System/Application Class Loader</strong><br>System/Application Class Loader从系统类路径中加载应用指定的类，当启动应用程序的时候可以使用-cp或-classpath命令行选项来设置该路径。这个内部是使用匹配到java.class.path的环境变量。这个类加载器在Java中通过sun.misc.Launcher$AppClassLoader类实现。</p>
+</li>
+</ul>
+<p>注意：除了上述的三种主要的类加载器，程序员可以自定义类加载器。通过类加载器的委派模型保证了应用的独立性。这种方法被用在web应用服务器，如Tomcat，使得web应用和企业解决方案独立运行。</p>
+<img src="/images/jvm/jvm_loading_subsystem2.jpg" alt="Loading Sub System"  />
+<div align="center">图3</div>
+
+<p>每个类加载器有自己命名空间来存储载入的类。当一个类加载器加载一个类，会基于存储在命名空间中的FQCN（Fully Qualified Class Name）来确认类是否已经加载了类。即使类有相同的FQDN，但是命名空间不同，也被认为是不同的类。不同的命名空间意味着类被另一个加载器载入过。</p>
+<h2 id="2-2-链接（Linking）"><a href="#2-2-链接（Linking）" class="headerlink" title="2.2 链接（Linking）"></a>2.2 链接（Linking）</h2><p>链接过程包括验证和准备载入的类和接口，它的超类和超接口，还有必要时它的元素类型</p>
+<pre><code>- 类和接口必须在链接之前完全载入
+- 类和接口在初始化之前必须完全验证和准备
+- 如果在链接过程中发生错误，它抛在程序中的某个点，在该点程序会执行一些操作，直接或间接的要求链接到错误中涉及的类或接口。</code></pre><p>链接发生在以下三个阶段：</p>
+<ul>
+<li><p>验证（verification）</p>
+<p>确保.class文件的正确性（代码是否准确的根据Java语言规范编写，是否通过符合JVM规范的有效编译器生成？）。这是类加载处理过程中最复杂的测试过程，并且花最长的时间。即使链接减慢了类的加载过程，但是它避免了执行字节码的时候执行多次检查，因此使得整体执行更加有效和有效率。如果验证失败，会抛错误（java.lang.VerifyError）。例如，下列的检查会被执行。</p>
+<pre><code>○ 一致和正确格式化的符号列表
+○ final方法/类没有override
+○ 方法遵循访问权限控制关键字
+○ 方法具有正确的参数数量和类型
+○ 字节码不能正确填装栈
+○ 变量在被读取前进行了初始化
+○ 变量是正确类型的值</code></pre></li>
+<li><p>准备（preparation）<br>为JVM使用的静态存储和任何数据结构分配内存比如方法表。静态字段被创建并初始化为默认值，不过这个阶段不会执行初始化程序或代码，因为这个事发生在 初始化阶段。</p>
+</li>
+<li><p>解析（resolution）<br>  使用直接引用替换类型的符号引用，这是通过搜索方法区来定位被引用的实体。</p>
+</li>
+</ul>
+<h2 id="2-3-初始化（Initialization）"><a href="#2-3-初始化（Initialization）" class="headerlink" title="2.3 初始化（Initialization）"></a>2.3 初始化（Initialization）</h2><p>在这个阶段，每个加载的类或接口的初始化逻辑会被执行（比如类的构造函数的调用）。因为JVM是多线程，类或接口的初始化应该小心的使用适当的同步来避免一些其他线程同时尝试初始化同样的类或接口。（使得线程安全）</p>
+<p>这是类加载的最后阶段，在这个阶段所有静态变量会分配代码中定义的原始值，并且如果有静态代码块的话会被执行。这个会从顶部到底部逐行执行并且从父类到自类的顺序执行。</p>
+<h1 id="3-运行时数据区域（Runtime-Data-Area）"><a href="#3-运行时数据区域（Runtime-Data-Area）" class="headerlink" title="3 运行时数据区域（Runtime Data Area）"></a>3 运行时数据区域（Runtime Data Area）</h1><p>运行时数据区域是JVM程序在操作系统上运行时分配的内存区域，除了读取.class文件之外，类加载器子系统生成相应的二进制数据并且分别为每个类保存如下的信息到方法区中。</p>
+<ul>
+<li>载入类和它的直接父类的完全限定名称</li>
+<li>是否.class文件跟Class/Interface/Enum有关</li>
+<li>修饰符，静态变量和方法信息等</li>
+</ul>
+<p>对于每个载入的.class类，它创建类的一个对象来表示堆内存中的文件，就像java.lang包中定义的。这个类对象之后在代码中能用来读取类层次的信息（类名称，父类名称， 方法，变量信息，静态变量等等）。</p>
+<h2 id="3-1-方法区（Method-Area，线程间共享）"><a href="#3-1-方法区（Method-Area，线程间共享）" class="headerlink" title="3.1 方法区（Method Area，线程间共享）"></a>3.1 方法区（Method Area，线程间共享）</h2><p>这个是共享资源（每个JVM只有一个方法区）。所有的JVM线程共享方法区，所以访问方法数据和动态链接处理一定是线程安全的。<br>方法区存储类层次的数据（包含静态变量）比如：</p>
+<ul>
+<li>加载器引用</li>
+<li>运行时静态量池 - 数字常量，字段引用，方法引用，属性；每个方法和接口的常量也一样，它包含了方法跟字段的所有引用。当一个方法或字段被引用，JVM运用运行时常量池在内存中搜索方法或字段的实际地址。</li>
+<li>字段数据 - 每个字段： 名字，类型，修饰符，属性</li>
+<li>方法数据 - 每个方法： 名字， 返回类型，参数类型（按顺序），修饰符，属性</li>
+<li>方法代码 - 每个方法：字节码，运算符栈大小，本地变量大小，本地变量表，异常表；在异常表中每个异常处理程序：开始点，结束点，处理程序代码的PC偏移量，捕捉的异常类的常量池索引</li>
+</ul>
+<h2 id="3-2-堆区域（Heap-Area，线程共享）"><a href="#3-2-堆区域（Heap-Area，线程共享）" class="headerlink" title="3.2 堆区域（Heap Area，线程共享）"></a>3.2 堆区域（Heap Area，线程共享）</h2><p>这个也是共享资源（每个JVM只有一个堆区域）。所有对象的信息和它们对应的实例变量和数组被存储在堆区域。因为方法区和数据区对于多线程是共享内存，存储在方法区和堆区的数据不是线程安全的。堆区是GC的一个大目标。</p>
+<h2 id="3-3-栈区域（Stack-Area，线程独享）"><a href="#3-3-栈区域（Stack-Area，线程独享）" class="headerlink" title="3.3 栈区域（Stack Area，线程独享）"></a>3.3 栈区域（Stack Area，线程独享）</h2><p>这个不是共享资源。对于每个JVM线程，当线程开始的时候，一个单独的运行时栈被创建用来存储方法调用。对于每个这样的方法调用。一个实体将被创建并且加入（推入）运行时栈顶，这样的实体被叫做栈帧。<br>每个栈帧都有对本地变量数组的引用，操作数栈，和正在执行类的运行时常量池。本地变量的尺寸和操作数尺寸是在编译中决定的。因此，栈帧的尺寸根据方法是固定的。<br>当方法正常返回或是方法调用过程中抛出未捕获的异常的时候帧会被移除（弹出）。注意如果任何异常发生， stack trace（可以通过方法显示，如printStackTrace()）的每一行表达了一个栈帧。因为栈区域不是共享资源所以栈区域是线程安全的。</p>
+<img src="/images/jvm/jvm_stackframe.png" alt="Stack Frame" style="zoom:67%;" />
+<div align="center">图4</div>
+
+<p>栈帧被分为三个子实体</p>
+<ul>
+<li>本地变量数组（Local Variable Array）<br>有从0开始的索引。对于一个特定的方法，有多少个被涉及的变量以及相应的值被存储在这里。索引0是方法所属的类的引用，从1开始，存储传给方法的参数，在方法参数之后，存储方法的本地参数。</li>
+<li>操作数栈（Operand Stack）<br>如果有需要这里表现为运行时工作空间来执行任何立时操作。每个方法在操作数栈和本地变量数组之间交换数据，并压入或弹出其他方法调用结果。操作数栈空间的必要大小可以在编译期间决定。因此，操作数栈的大小也能够在编译期间决定。</li>
+<li>帧数据（Frame Data）<br>所有跟方法相关的符号存储在这里。对于异常，捕捉块信息也将在帧数据中维护。</li>
+</ul>
+<p>因为有运行时栈帧，在一个线程终止之后，它的栈帧也将会被JVM销毁。<br>栈可以是动态的或固定的尺寸。如果线程请求太大的栈（比允许的更大）就会抛StackOverflowError。如果线程请求一个新的帧并且没有足够的内存来分配，OutOfMemoryError会被抛出。</p>
+<h2 id="3-4-PC计数器（PC-Registers，线程独享）"><a href="#3-4-PC计数器（PC-Registers，线程独享）" class="headerlink" title="3.4 PC计数器（PC Registers，线程独享）"></a>3.4 PC计数器（PC Registers，线程独享）</h2><p>对于每一个JVM线程，当线程启动，一个单独的PC（program counter）计数器被创建来持有当前正在执行指令的地址（在方法区中的内存地址）。如果当前方法是native的，PC是没有定义的。一旦执行结束，PC计数器会用下一个指令的地址进行更新。</p>
+<h2 id="3-5-Native方法栈（Native-Method-Stack，线程独享）"><a href="#3-5-Native方法栈（Native-Method-Stack，线程独享）" class="headerlink" title="3.5 Native方法栈（Native Method Stack，线程独享）"></a>3.5 Native方法栈（Native Method Stack，线程独享）</h2><p>在Java线程和Native操作系统线程之间有直接的映射。在为一个Java线程准备所有的状态之后，一个单独的Native栈会被创建来存储通过JNI（Java Native Interface）调用的Native方法信息（通常是用C/C++编写）。</p>
+<p>一旦Native线程被创建和初始化，它会调用Java线程中的run()方法。当run()方法返回，未捕获的异常（如果有的话）被处理，Native线程确认是否由于线程的终结JVM需要终结。（例如：是否这是最后一个非守护线程）。当线程终止，所有Native和Java线程的资源都会被释放。</p>
+<p>一旦Java线程被释放Native线程会被回收。操作系统因此负责调度所有线程并且分发它们给任何任何有效的CPU。</p>
+<h1 id="4-执行引擎"><a href="#4-执行引擎" class="headerlink" title="4 执行引擎"></a>4 执行引擎</h1><p>字节码的实际执行发生在这里。执行引擎逐行读取分配给上述运行时数据区域的数据并执行字节码中的指令。</p>
+<h2 id="4-1-解释器（Interpreter）"><a href="#4-1-解释器（Interpreter）" class="headerlink" title="4.1 解释器（Interpreter）"></a>4.1 解释器（Interpreter）</h2><p>解释器解释字节码并且一条一条的执行指令。因此，它能很快的解释一行字节码，但是执行被解释的结果是一项更慢的任务。缺点是当一个方法被调用多次，每一次调用要求一个新的解释和一个更慢的执行。</p>
+<h2 id="4-2-即时编译器（Just-In-Time-JIT-编译器）"><a href="#4-2-即时编译器（Just-In-Time-JIT-编译器）" class="headerlink" title="4.2 即时编译器（Just-In-Time(JIT)编译器）"></a>4.2 即时编译器（Just-In-Time(JIT)编译器）</h2><p>如果只有解释器可用，当一个方法被调用多次，每一次调用解释也会发生，如果都被有效处理的话是冗余操作。使用JIT编译器的话，首先，编译器会将整个字节码编译为native代码（机器码）。然后对于多次方法调用，它会直接提供Native代码并且使用Native代码的执行方式比一行一行解释指令的方式要快。Native代码存储在cache，这样被编译的代码会被更快的执行。</p>
+<p>尽管如此，即使是JIT编译器，编译比解释器的解释花更多的时间。对于只执行一次的代码段，最好使用解释来代替编译。Native代码也存在cache中，这个一种很贵的资源。由于这些状况，JIT编译器内部会检查每个方法调用的频率并且决定只有当选中的方法已经发生一定程度的次数才会进行编译。这种适应性编译的想法被用在Oracle Hotspot VM中。</p>
+<p>当引入JVM供应商的性能优化方案时执行引擎有资格成为一个关键子系统，在这些努力中，下面四种部件能够很大提高性能。</p>
+<ul>
+<li>中间代码生成器产生中间代码</li>
+<li>代码优化器负责优化上面生成的中间代码</li>
+<li>目标代码生成器负责生成Native代码（例如 机器码）</li>
+<li>分析器是一个特殊部件，负责找到性能瓶颈 也称为hotspots (例如 方法被调用多次的实例)</li>
+</ul>
+<p>下面这种架构图有对这四个部件进行粗略直观的描述。</p>
+<img src="/images/jvm/jvm_architecure.png" alt="architecure" style="zoom: 67%;" />
+<div align="center">图5</div>
+
+<h2 id="4-3-垃圾收集器（Garbage-Collector-GC）"><a href="#4-3-垃圾收集器（Garbage-Collector-GC）" class="headerlink" title="4.3 垃圾收集器（Garbage Collector, GC）"></a>4.3 垃圾收集器（Garbage Collector, GC）</h2><p>只要对象被引用，JVM认为它是活的。一旦对象不再被引用并且对于应用程序不可达，垃圾收集器会移除它并回收未被使用的内存。总的说，垃圾收集发生在后台，尽管如此我们能通过System.gc()方法触发它。（执行不能被保证，因此，调用Thread.sleep(1000) 并等待GC完成）</p>
+<h1 id="5-Java-Native-Interface-JNI"><a href="#5-Java-Native-Interface-JNI" class="headerlink" title="5 Java Native Interface(JNI)"></a>5 Java Native Interface(JNI)</h1><p>这个接口被用来跟执行程序中要求的Native方法库进行交互，并且提供Native库的能力（常使用C/C++编写）。这个使JVM能够调用C/C++库并且能被特定于硬件的C/C++库调用</p>
+<h1 id="6-Native方法库"><a href="#6-Native方法库" class="headerlink" title="6 Native方法库"></a>6 Native方法库</h1><p>这是执行引擎必须的的C/C++ Native库的集合，能够通过Native接口访问。</p>
+<h1 id="7-JVM线程"><a href="#7-JVM线程" class="headerlink" title="7 JVM线程"></a>7 JVM线程</h1><p>我们讨论了Java程序如何运行，但是没有特别提及执行器。实际上为了执行之前提及的每个任务，JVM并发运行多线程。这些线程中的一些携带程序逻辑，并且被程序创建（应用线程），而其他的被JVM创建来执行系统后台任务（系统线程）。</p>
+<p>主要的应用线程是主线程，它的创建是调用public static void main(String[])的部分，其他应用线程是由这个主线程创建的。应用线程执行任务，类似main()方法中开始的运行指令，如果在任何方法逻辑中发现new关键字在堆中创建对象等。</p>
+<p>主要的系统线程如下:</p>
+<ul>
+<li>编译器线程<br>在运行时，字节码编译成native代码由这些线程承担</li>
+<li>GC线程<br>所有GC相关的活动都由这些线程实施</li>
+<li>周期性任务线程<br>调度周期性操作执行的定时器事件（比如 中断）被这个线程执行</li>
+<li>信号分发线程<br>这个线程接受发给JVM进程的信号并且通过调用适当的JVM方法在JVM中处理它们</li>
+<li>VM线程<br>作为前提条件，一些操作需要JVM来达到一个安全点，在这里堆区域的修改不再发生。这个场景的例子有“stop-the-world”垃圾搜集，线程栈dumps，线程挂起和偏向锁撤销。这些操作在一个叫做VM线程的特殊线程上执行。</li>
+</ul>
+<h1 id="8-一些理解的关键点"><a href="#8-一些理解的关键点" class="headerlink" title="8 一些理解的关键点"></a>8 一些理解的关键点</h1><ul>
+<li><p>Java被认为是解释语言和编译语言</p>
+</li>
+<li><p>通过设计，由于动态链接和运行时解释Java很慢</p>
+</li>
+<li><p>JIT编译器通过用native代码替换字节码来弥补解释器重复操作的缺点</p>
+</li>
+<li><p>最新版本的Java版本针对原始架构中的瓶颈</p>
+</li>
+<li><p>JVM只是一个技术规范，供应商在实现过程中可以自由自定义，创新和改进性能</p>
+</li>
+</ul>
+<p>参考材料<br>     1. <a href="https://medium.com/platform-engineer/understanding-jvm-architecture-22c0ddf09722" target="_blank" rel="noopener">https://medium.com/platform-engineer/understanding-jvm-architecture-22c0ddf09722</a><br>    2. <a href="https://medium.com/platform-engineer/understanding-java-memory-model-1d0863f6d973" target="_blank" rel="noopener">https://medium.com/platform-engineer/understanding-java-memory-model-1d0863f6d973</a><br>    3. <a href="https://codepumpkin.com/typesof-class-loader/" target="_blank" rel="noopener">https://codepumpkin.com/typesof-class-loader/</a><br>    4. <a href="https://www.quora.com/In-which-different-parts-of-the-Java-Virtual-Machine-does-the-class-loader-load-the-classes" target="_blank" rel="noopener">https://www.quora.com/In-which-different-parts-of-the-Java-Virtual-Machine-does-the-class-loader-load-the-classes</a></p>
+]]></content>
+      <categories>
+        <category>JAVA</category>
+        <category>JVM</category>
+      </categories>
+      <tags>
+        <tag>JVM</tag>
+        <tag>Architecture</tag>
+        <tag>架构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Hello World</title>
+    <url>/2020/05/24/hello-world/</url>
+    <content><![CDATA[<link rel="stylesheet" class="aplayer-secondary-style-marker" href="/assets/css/APlayer.min.css"><script src="/assets/js/APlayer.min.js" class="aplayer-secondary-script-marker"></script><script class="meting-secondary-script-marker" src="/assets/js/Meting.min.js"></script><p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
+<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
+<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
+<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
+<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/one-command-deployment.html" target="_blank" rel="noopener">Deployment</a></p>
+]]></content>
+  </entry>
+  <entry>
+    <title>体验快速文件风格转换</title>
+    <url>/2020/05/30/FastStyleTransfer/</url>
+    <content><![CDATA[<link rel="stylesheet" class="aplayer-secondary-style-marker" href="/assets/css/APlayer.min.css"><script src="/assets/js/APlayer.min.js" class="aplayer-secondary-script-marker"></script><script class="meting-secondary-script-marker" src="/assets/js/Meting.min.js"></script><h1 id="1-概述"><a href="#1-概述" class="headerlink" title="1 概述"></a>1 概述</h1><p>对于搞IT的同学来说，技术的更迭一直是很头疼的事情，从原来的PC时代到现在的移动互联网，中间冒出太多东西了，干了这行就必须不断的学习，不然就很容易被行业淘汰了，机器学习是最近几年比较火的一个技术，其中的深度学习应该是最受欢迎的分支了，在市场上已经有大量的应用，大家看到的智能语音助手，智能翻译，智能相机，无人驾驶等都是使用了深度学习的算法。还有笔者之前学习了Udacity的课程，里面的项目有根据一段剧本，经过对模型的训练，可以生成新的剧本，还有根据一批图片比如人脸来训练相关模型，可以生成一个新的人脸。当时看到这些的时候还是觉得好神奇的。那时候就听说了使用神经网络可以大大减少传统编程所需要的时间，让程序员失业，所以心里的焦虑油然而生。</p>
+<p>这片文章主要是为了先睹为快，并没有设计太多的技术细节，对于一个新的事物，先知其然再知其所以然，循序渐进。文中涉及的项目叫做<strong>快速风格变换</strong>，就是将输入的照片根据另外一张图片的风格，比如油画的风格，生成同样风格的一张新图片。项目是MIT的一位小哥基于tensorflow做出来的，采用的卷积神经网络（Convolutional Neural Network, 简称CNN），可以在下面的地址找到。</p>
+<blockquote>
+<p>​        <a href="https://github.com/lengstrom/fast-style-transfer" target="_blank" rel="noopener">https://github.com/lengstrom/fast-style-transfer</a></p>
+</blockquote>
+<p>先来看一下效果，下面有三张图，图一是转换成的图片风格，图二是需要被转换的图片，图三是图二根据图一的风格转换成的新图片。</p>
+<div class="justified-gallery"><p><img src="/resource/filetransfer/style/udnie.jpg" alt=""><br><img src="/resource/filetransfer/sample/stata.jpg" alt=""><br><img src="/resource/filetransfer/sample/stata_udnie_header.jpg" alt=""></p>
+          </div>
+
+
+
+<h1 id="2-项目运行说明"><a href="#2-项目运行说明" class="headerlink" title="2 项目运行说明"></a>2 项目运行说明</h1><h2 id="2-1-先安装Anaconda"><a href="#2-1-先安装Anaconda" class="headerlink" title="2.1 先安装Anaconda"></a>2.1 先安装Anaconda</h2><p>   在深度学习中会有很多依赖的包，不同的项目可能需要的包差别也比较大，比如有的项目1需要python 2和支持包A而项目2需要python 3和支持包B，这样当你同时工作在项目1和项目2的时候切换环境就十分必要，另外在工作的环境里，经常也需要对依赖的包进行管理，Anaconda就是一个很好的工具，可以很方便的进行环境和包的管理。</p>
+<p>   Anaconda的安装方法可以在<a href="https://docs.anaconda.com/anaconda/install/" target="_blank" rel="noopener">这里</a>找到，最常用的命令如下</p>
+<blockquote>
+<ul>
+<li>创建新环境<br>conda create -n &lt;环境名&gt;</li>
+<li>查看已经创建的环境<br>conda env list 或 conda info --envs</li>
+<li>安装包<br>conda install &lt;包名&gt;  也可以使用pip install &lt;包名&gt;</li>
+<li>启动环境<br>source activate &lt;环境名&gt; 或 conda deactivate &lt;环境名&gt;</li>
+<li>停用环境<br>source deactivate &lt;环境名&gt; 或 conda deactivate &lt;环境名&gt;</li>
+<li>删除环境<br>conda remove -n &lt;环境名&gt; --all  或 conda remove --name &lt;环境名&gt; --all<br>注意：目前如果环境没有安装任何包，执行环境删除会报错，可以先随便安装一个包再删除。</li>
+</ul>
+</blockquote>
+<h2 id="2-2-创建虚拟环境"><a href="#2-2-创建虚拟环境" class="headerlink" title="2.2 创建虚拟环境"></a>2.2 创建虚拟环境</h2><ul>
+<li>创建环境tf-gpu，其中安装了tensorflow-gpu，如果不支持tensorflow-gpu可以使用tensorflow<blockquote>
+<p>conda create -n tf-gpu  tensorflow-gpu=2.1.0</p>
+</blockquote>
+</li>
+<li>激活环境<blockquote>
+<p>conda activate tf-gpu</p>
+</blockquote>
+</li>
+<li>打开notebook，在这个项目中我没有用到，jupyterlab跟jupyter notebook类似，都是功能强大的记事本，jupyter notebook是基于web的交互计算环境，用来创建jupyter notebook文档，支持多种语言，如Python，Julia，R等，用来进行数据分析，数据可视化，和进一步的交互性，探索性计算。而Jupyterlab是下一代的用户界面，包含记事本，它包含模块化结构，它可以在同一个窗口以tab的形式打开多个记事本或文件（例如HTML，文本，Markdown等），类似一个集成开发环境。<blockquote>
+<p>conda intall jupyterlab<br>jupyter lab</p>
+</blockquote>
+</li>
+<li>安装moviepy，如果只是处理图片应该不需要。<blockquote>
+<p>pip install moviepy==1.0.2</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="2-3-训练网络"><a href="#2-3-训练网络" class="headerlink" title="2.3 训练网络"></a>2.3 训练网络</h2><p>  使用style.py来训练风格转换神经网络，使用python style.py可以看到所有需要的参数，训练网络需要花费很长的时间，如果在本机跑的话机器会疯狂运转，发热很厉害，而且本地机器要求配置也比较高，可以租用类似亚马逊的云服务器来跑。</p>
+<pre><code>用法示例
+python style.py --style path/to/style/img.jpg \
+  --checkpoint-dir checkpoint/path \
+  --test path/to/test/img.jpg \
+  --test-dir path/to/test/dir \
+  --content-weight 1.5e1 \
+  --checkpoint-iterations 1000 \
+  --batch-size 20</code></pre><p>  其中--style跟--checkpoint-dir是必须的，其他的可以选择默认，--style为用来训练的风格图片，--checkpoint-dir是输出的模型文件，后面的评估会用到。</p>
+<h2 id="2-4-评估风格转换网络"><a href="#2-4-评估风格转换网络" class="headerlink" title="2.4 评估风格转换网络"></a>2.4 评估风格转换网络</h2><p>  使用evaluate.py来评估风格转换网络。运行python evaluate.py可以看到所有的参数。</p>
+<pre><code>用法示例
+python evaluate.py --checkpoint path/to/style/model.ckpt \
+  --in-path dir/of/test/imgs/ \
+  --out-path dir/for/results/
+
+--checkpoint指定模型，--in-path输入图片路径，--ou t-path输出图片路径</code></pre><p>  训练的时间比较长，如果可以访问google drive，可以在<a href="https://drive.google.com/drive/folders/0B9jhaT37ydSyRk9UX0wwX3BpMzQ" target="_blank" rel="noopener">这里</a>找到现成的模型文件，这里也贴上我跑出来的模型文件。</p>
+<table>
+<thead>
+<tr>
+<th>图片</th>
+<th>模型</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/resource/filetransfer/style/la_muse.jpg" alt="la_muse" style="zoom:25%;" /></td>
+<td><a href="/resource/filetransfer/model/la-muse.ckpt">LaMuse</a></td>
+</tr>
+<tr>
+<td><img src="/resource/filetransfer/style/rain_princess.jpg" alt="rain-princess" style="zoom:12%;" /></td>
+<td><a href="/resource/filetransfer/model/rain-princess.ckpt">RainPrincess</a></td>
+</tr>
+<tr>
+<td><img src="/resource/filetransfer/style/the_scream.jpg" alt="the_scream" style="zoom:25%;" /></td>
+<td><a href="/resource/filetransfer/model/scream.ckpt">Scream</a></td>
+</tr>
+<tr>
+<td><img src="/resource/filetransfer/style/the_shipwreck_of_the_minotaur.jpg" alt="the_shipwreck_of_the_minotaur" style="zoom:15%;" /></td>
+<td><a href="/resource/filetransfer/model/wreck.ckpt">Wreck</a></td>
+</tr>
+<tr>
+<td><img src="/resource/filetransfer/style/udnie.jpg" alt="udnie" style="zoom:25%;" /></td>
+<td><a href="/resource/filetransfer/model/udnie.ckpt">Udnie</a></td>
+</tr>
+<tr>
+<td><img src="/resource/filetransfer/style/wave.jpg" alt="wave" style="zoom:15%;" /></td>
+<td><a href="/resource/filetransfer/model/wave.ckpt">Wave</a></td>
+</tr>
+</tbody></table>
+<p>  下面是我用自己的图片输入产生的输出。</p>
+  <img src="/resource/filetransfer/image/input.jpg" alt="input" style="zoom:25%;" />
+
+<table>
+<thead>
+<tr>
+<th>LaMuse</th>
+<th>RainPrincess</th>
+<th>Scream</th>
+<th>Wreck</th>
+<th>Udnie</th>
+<th>Wave</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/resource/filetransfer/image/Yorkshire-la-muse.jpg" alt="LaMuse" style="zoom:25%;" /></td>
+<td><img src="/resource/filetransfer/image/Yorkshire-rain-princess.jpg" alt="RainPrincess" style="zoom:25%;" /></td>
+<td><img src="/resource/filetransfer/image/Yorkshire-scream.jpg" alt="Scream" style="zoom:25%;" /></td>
+<td><img src="/resource/filetransfer/image/Yorkshire-wreck.jpg" alt="Wreck" style="zoom:25%;" /></td>
+<td><img src="/resource/filetransfer/image/Yorkshire-udnie.jpg" alt="Udnie" style="zoom:25%;" /></td>
+<td><img src="/resource/filetransfer/image/Yorkshire-wave.jpg" alt="Wave" style="zoom:25%;" /></td>
+</tr>
+</tbody></table>
+<h2 id="2-5-风格化视频"><a href="#2-5-风格化视频" class="headerlink" title="2.5 风格化视频"></a>2.5 风格化视频</h2><p>使用transform_video.py来转换视频的风格。运行python transform_video.py可以查看所有参数。要求ffmpeg。</p>
+<pre><code>用法示例
+python transform_video.py --in-path path/to/input/vid.mp4 \
+  --checkpoint path/to/style/model.ckpt \
+  --out-path out/video.mp4 \
+  --device /gpu:0 \
+  --batch-size 4
+
+--in-path输入视频，--checkpoint模型文件</code></pre><p>示例效果</p>
+<div id="dplayer0" class="dplayer hexo-tag-dplayer-mark" style="margin-bottom: 20px;"></div><script>(function(){var player = new DPlayer({"container":document.getElementById("dplayer0"),"theme":"#FADFA3","screenshot":true,"video":{"url":"/resource/filetransfer/video/foxsample.mp4","pic":"/resource/filetransfer/video/foxsample.png"}});window.dplayers||(window.dplayers=[]);window.dplayers.push(player);})()</script>
+
+<p>我使用另外一个风格进行处理，效果如下</p>
+<table>
+<thead>
+<tr>
+<th>原视频</th>
+<th>LaMuse</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><div id="dplayer1" class="dplayer hexo-tag-dplayer-mark" style="margin-bottom: 20px;"></div><script>(function(){var player = new DPlayer({"container":document.getElementById("dplayer1"),"theme":"#FADFA3","screenshot":true,"video":{"url":"/resource/filetransfer/video/fox.mp4","pic":"/resource/filetransfer/video/fox.png"}});window.dplayers||(window.dplayers=[]);window.dplayers.push(player);})()</script></td>
+<td><div id="dplayer2" class="dplayer hexo-tag-dplayer-mark" style="margin-bottom: 20px;"></div><script>(function(){var player = new DPlayer({"container":document.getElementById("dplayer2"),"theme":"#FADFA3","screenshot":true,"video":{"url":"/resource/filetransfer/video/fox-la-muse.mp4","pic":"/resource/filetransfer/video/fox-la-muse.png"}});window.dplayers||(window.dplayers=[]);window.dplayers.push(player);})()</script></td>
+</tr>
+</tbody></table>
+<h2 id="2-6-运行要求"><a href="#2-6-运行要求" class="headerlink" title="2.6 运行要求"></a>2.6 运行要求</h2><p>最后说明下关于跑该项目的硬性要求，下面是最低要求。</p>
+<ul>
+<li>TensorFlow 0.11.0 </li>
+<li>Python 2.7.9, Pillow 3.4.2, scipy 0.18.1, numpy 1.11.2</li>
+<li>If you want to train (and don’t want to wait for 4 months):<ul>
+<li>A decent GPU</li>
+<li>All the required NVIDIA software to run TF on a GPU (cuda, etc)</li>
+</ul>
+</li>
+<li>ffmpeg 3.1.3 if you want to stylize video</li>
+</ul>
+]]></content>
+      <categories>
+        <category>Deep Learning</category>
+        <category>CNN</category>
+      </categories>
+      <tags>
+        <tag>Deep Learning</tag>
+        <tag>Tensorflow</tag>
+        <tag>CNN</tag>
+        <tag>AI</tag>
+        <tag>Machine Learning</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>English Greetings - What&#39;s up? How are you? How&#39;s it going</title>
+    <url>/2020/06/07/greeting/</url>
+    <content><![CDATA[<link rel="stylesheet" class="aplayer-secondary-style-marker" href="/assets/css/APlayer.min.css"><script src="/assets/js/APlayer.min.js" class="aplayer-secondary-script-marker"></script><script class="meting-secondary-script-marker" src="/assets/js/Meting.min.js"></script><p>问候场景中比较常用开场问候有</p>
+<blockquote>
+<ul>
+<li>What’s up?</li>
+<li>How are you?</li>
+<li>How’s it going?</li>
+</ul>
+</blockquote>
+<p>对于这些问候，你知道该怎么回答吗？</p>
+<h2 id="1-How-are-you"><a href="#1-How-are-you" class="headerlink" title="1. How are you?"></a>1. How are you?</h2><p>这个也可以说How are you doing?</p>
+<blockquote>
+<p>可以回答 I’m fine / I’m good / I’m alright / I’m okay / I’m not bad</p>
+</blockquote>
+<p>对于native speaker来说，有的回答是比较old fashion的，比如咱们中学课本中教的”I’m fine, thank you, and you? “也不能说不对，就是不大流行这样的说法了，对于这个问候的回答还是要区分对象的。</p>
+<ul>
+<li>如果对方是陌生人或是不是很熟的人<br>“how are you?”基本上等于hello，对方不会太关心你具体的状态，比如商店里的收银员跟你说”how are you?”，这种情况最好使用比较简短的回答。<br>第一个常用的简短回答就是 Not bad，根据语气，可以是中性的也可以是比较正面的。第二个比较短的回答是All right，根据语气，可以是中性的也可以是比较正面的，还有就是Good。</li>
+<li>如果是对朋友，家人或是比较亲近的人<br>他们比较关心你的状况，所以回答上可以比较详细些，比如I’m exhausted/I’m frustrated/I’m busy/I’m stressed out/I’ve been better/I’m great/I’m excited，然后blabla的说说为了啥事儿之类的，或是对什么的抱怨，如果回答”I’m okay”，作为比较关心你的人从你的语气中可能会觉得你状态不好，会有进一步的追问”just okay?”，这里提一下I’ve been better，一般都伴随着不如意的状态，对方听到这个一般会反问What’s it going on? Why?，或是在一堆抱怨之后加上I’ve been better。</li>
+</ul>
+<p>Note: 对于比较熟的人，在回答之后，也会反问回去，作为对话持续的。陌生人则不需要。</p>
+<p>关于刚才说的这一部分，可以参考下面的视频，<a href="https://www.youtube.com/watch?v=v7hz64aVcRw" target="_blank" rel="noopener">视频来源</a></p>
+<div id="dplayer0" class="dplayer hexo-tag-dplayer-mark" style="margin-bottom: 20px;"></div><script>(function(){var player = new DPlayer({"container":document.getElementById("dplayer0"),"theme":"#FADFA3","screenshot":true,"video":{"url":"https://video.wurendong.com/english/greeting/howareyou.mp4","pic":"https://video.wurendong.com/english/greeting/howareyou.png"}});window.dplayers||(window.dplayers=[]);window.dplayers.push(player);})()</script>
+
+
+<h2 id="2-How’s-it-going"><a href="#2-How’s-it-going" class="headerlink" title="2. How’s it going?"></a>2. How’s it going?</h2><p>这里的it表示的是your life，所以这里也可以说How’s your life going? </p>
+<blockquote>
+<p>回答的时候主语不能为I，而是it， It’s fine / It’s good / It’s alright / It’s okay / It’s not bad</p>
+</blockquote>
+<p>也可以用How are things?</p>
+<blockquote>
+<p>由于things使用了复数，回答的时候也需要用复数，They’re fine / They’re good / They’re alright / They’re okay / They’re not bad</p>
+</blockquote>
+<p>如果两人后很长时间没见了，可以说How have you been? 或How’s life?</p>
+<blockquote>
+<p>A: How have you been?<br>B: I’ve been good</p>
+<p>A: How’s life<br>B: It’s good</p>
+</blockquote>
+<p>Tips: 如果有人问你类似的问题，可以省略主语，直接使用形容词，比如</p>
+<blockquote>
+<p>A: How are you?<br>B: Good</p>
+<p>A: How’s it going?<br>B: Alright</p>
+<p>A: How have you been?<br>B: Not bad</p>
+</blockquote>
+<h2 id="3-What’s-up"><a href="#3-What’s-up" class="headerlink" title="3. What’s up?"></a>3. What’s up?</h2><p>What’s up常常简单表示为wassup或直接是sup，有点类似What are you doing? 所以不能只能使用形容词来回答，你可以直接使用动作来回答，比如</p>
+<blockquote>
+<ul>
+<li>I’m studing/I’m eating lunch</li>
+<li>Not much/Not too much/Nothing special //没啥特别的是，或你在做些不重要的事情，这个是比较common的回答</li>
+</ul>
+</blockquote>
+<p>比较类似的说法还有What’s going on或是What’s happening? 回答也是跟What’s up类似的</p>
+<blockquote>
+<ul>
+<li>I’m cleaning my dirty shoes</li>
+<li>Not much</li>
+</ul>
+</blockquote>
+<p>还有种说法What’s new? 这种说法更general，它表示What’s new in your life? 所以你可以回答你最近发生的一些事情</p>
+<blockquote>
+<ul>
+<li>I had a test yesterday</li>
+<li>I’m taking a vacation soon</li>
+<li>Not much</li>
+</ul>
+</blockquote>
+<h2 id="4-Summary"><a href="#4-Summary" class="headerlink" title="4. Summary"></a>4. Summary</h2><p>简单总结来说，如果问的时候使用的是How，回答就使用形容词。</p>
+<blockquote>
+<p>How _ ?<br>(形容词回答)</p>
+<p>A: How are you doing?<br>B: Great</p>
+<p>A: How’s it going?<br>B: Alright</p>
+<p>A: How’s life?<br>B: Not bad</p>
+</blockquote>
+<p>如果问的时候使用的是What，就用动作回答。</p>
+<blockquote>
+<p>What _ ?<br>(动作回答)</p>
+<p>A: What’s up?<br>B: I’m going shoping.</p>
+<p>A: What’s going onn?<br>B: I’m going home</p>
+<p>活着直接回答Not much</p>
+</blockquote>
+<p>可以参考如下相关视频，<a href="https://www.youtube.com/watch?v=TRp8y3vyHfY" target="_blank" rel="noopener">视频来源</a></p>
+<div id="dplayer1" class="dplayer hexo-tag-dplayer-mark" style="margin-bottom: 20px;"></div><script>(function(){var player = new DPlayer({"container":document.getElementById("dplayer1"),"theme":"#FADFA3","screenshot":true,"video":{"url":"http://123.57.141.227/english/greeting/greeting1.mp4","pic":"http://123.57.141.227/english/greeting/greeting1.png"}});window.dplayers||(window.dplayers=[]);window.dplayers.push(player);})()</script> 
+]]></content>
+      <categories>
+        <category>English</category>
+        <category>Speaking</category>
+        <category>Greeting</category>
+      </categories>
+      <tags>
+        <tag>English</tag>
+        <tag>Speaking</tag>
+        <tag>Greeting</tag>
+      </tags>
+  </entry>
+</search>
