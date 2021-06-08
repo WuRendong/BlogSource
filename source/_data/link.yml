@@ -1,0 +1,27 @@
+class:
+  class_name: 友情链接
+  link_list:
+    1:
+      name: 热爱飞行的鸵鸟
+      link: https://www.weibo.com/1323980690/profile?topnav=1&wvr=6&is_all=1
+      avatar: https://tva4.sinaimg.cn/crop.0.1225.1859.1859.180/4eea5792jw1ef2o0ehd1dj21kw2dwkjl.jpg?KID=imgbed,tva&amp;Expires=1590692883&amp;ssig=4GmF2ZIXdt
+      descr: 微博
+    2:
+      name: Aaron's Unsplash
+      link: https://unsplash.com/@aaronwu
+      avatar: https://images.unsplash.com/profile-fb-1513737873-ed6c48f4c1a7.jpg?dpr=1&amp;auto=format&amp;fit=crop&amp;w=150&amp;h=150&amp;q=60&amp;crop=faces&amp;bg=fff
+      descr:   
+
+# class2:
+#    class_name: 鏈接無效
+#    link_list:
+#     1:
+#       name: 热爱飞行的鸵鸟
+#       link: https://www.weibo.com/1323980690/profile?topnav=1&wvr=6&is_all=1
+#       avatar: https://tva4.sinaimg.cn/crop.0.1225.1859.1859.180/4eea5792jw1ef2o0ehd1dj21kw2dwkjl.jpg?KID=imgbed,tva&amp;Expires=1590692883&amp;ssig=4GmF2ZIXdt
+#       descr: 微博
+#     2:
+#       name: Aaron's Unsplash
+#       link: https://unsplash.com/@aaronwu
+#       avatar: https://images.unsplash.com/profile-fb-1513737873-ed6c48f4c1a7.jpg?dpr=1&amp;auto=format&amp;fit=crop&amp;w=150&amp;h=150&amp;q=60&amp;crop=faces&amp;bg=fff
+#       descr: 
