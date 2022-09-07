@@ -104,9 +104,9 @@ deploy:
   branch: master
 
 algolia:
-  applicationID: 'MO027VVP8P'
-  apiKey: '07c635075a2fc6131218c1d70deadc6f'
-  indexName: 'blog'
+    applicationID: 'LSQFRHWQK0'#'MO027VVP8P'
+    apiKey: '6b5e35022be2c98e2b40816ae45a7d5f'#'07c635075a2fc6131218c1d70deadc6f'
+    indexName: 'blog'
 
 aplayer:
   meting: true
